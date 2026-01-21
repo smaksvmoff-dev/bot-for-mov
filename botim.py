@@ -2,6 +2,8 @@ import os
 import logging
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler
+from aiogram.webhook.webhook import WebhookRequestHandler
 
 logging.basicConfig(level=logging.INFO)
 
@@ -13,18 +15,19 @@ WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # masalan: https://your-app.onrender.com/webhook
 
 bot = Bot(token=TOKEN)
-dp = Dispatcher(bot)
+dp = Dispatcher()
+
 app = FastAPI()
 
 # Admin video yuboradi
-@dp.message_handler(content_types=["video"])
+@dp.message(commands=["video"])
 async def save_video(message: types.Message):
     if message.from_user.id != ADMIN_ID:
-        await message.reply("❌ Siz admin emassiz!")
+        await message.answer("❌ Siz admin emassiz!")
         return
     
     if not message.caption:
-        await message.reply("❗ Iltimos, captionda video ID yuboring (masalan: 1)")
+        await message.answer("❗ Iltimos, captionda video ID yuboring (masalan: 1)")
         return
     
     video_id = message.caption.strip()
@@ -33,29 +36,30 @@ async def save_video(message: types.Message):
         video=message.video.file_id,
         caption=f"VIDEO_ID:{video_id}"
     )
-    await message.reply(f"✅ Video kanalga saqlandi (ID: {video_id})")
+    await message.answer(f"✅ Video kanalga saqlandi (ID: {video_id})")
 
 # Foydalanuvchi ID yuboradi
-@dp.message_handler(lambda m: m.text.isdigit())
+@dp.message()
 async def get_video(message: types.Message):
-    video_id = message.text.strip()
-    async for msg in bot.iter_history(CHANNEL_ID, limit=1000):
-        if msg.caption and msg.caption.startswith("VIDEO_ID:"):
-            stored_id = msg.caption.split(":")[1]
-            if stored_id == video_id:
-                await message.answer_video(
-                    video=msg.video.file_id,
-                    caption=f"KINO KODI : {video_id}\n{BOT_USERNAME}"
-                )
-                return
-    await message.reply("❌ Bunday ID topilmadi.")
+    if message.text and message.text.isdigit():
+        video_id = message.text.strip()
+        async for msg in bot.get_chat_history(CHANNEL_ID, limit=1000):
+            if msg.caption and msg.caption.startswith("VIDEO_ID:"):
+                stored_id = msg.caption.split(":")[1]
+                if stored_id == video_id:
+                    await message.answer_video(
+                        video=msg.video.file_id,
+                        caption=f"KINO KODI : {video_id}\n{BOT_USERNAME}"
+                    )
+                    return
+        await message.answer("❌ Bunday ID topilmadi.")
 
 # Webhook endpoint
 @app.post(WEBHOOK_PATH)
 async def webhook(request: Request):
     data = await request.json()
-    update = types.Update(**data)
-    await dp.process_update(update)
+    update = types.Update.model_validate(data)
+    await dp.feed_update(bot, update)
     return {"status": "ok"}
 
 @app.on_event("startup")
