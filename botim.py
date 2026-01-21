@@ -2,8 +2,6 @@ import os
 import logging
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler
-from aiogram.webhook.webhook import WebhookRequestHandler
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,27 +14,22 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # masalan: https://your-app.onrender.com
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
-
 app = FastAPI()
 
 # Admin video yuboradi
-@dp.message(commands=["video"])
+@dp.message()
 async def save_video(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        await message.answer("❌ Siz admin emassiz!")
-        return
-    
-    if not message.caption:
-        await message.answer("❗ Iltimos, captionda video ID yuboring (masalan: 1)")
-        return
-    
-    video_id = message.caption.strip()
-    await bot.send_video(
-        chat_id=CHANNEL_ID,
-        video=message.video.file_id,
-        caption=f"VIDEO_ID:{video_id}"
-    )
-    await message.answer(f"✅ Video kanalga saqlandi (ID: {video_id})")
+    if message.video and message.from_user.id == ADMIN_ID:
+        if not message.caption:
+            await message.answer("❗ Iltimos, captionda video ID yuboring (masalan: 1)")
+            return
+        video_id = message.caption.strip()
+        await bot.send_video(
+            chat_id=CHANNEL_ID,
+            video=message.video.file_id,
+            caption=f"VIDEO_ID:{video_id}"
+        )
+        await message.answer(f"✅ Video kanalga saqlandi (ID: {video_id})")
 
 # Foydalanuvchi ID yuboradi
 @dp.message()
